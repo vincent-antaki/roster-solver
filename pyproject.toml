@@ -1,0 +1,21 @@
+[project]
+name = "roster-solver"
+version = "0.1.0"
+description = "Assign workers to events under skill, availability and scheduling constraints using OR-Tools CP-SAT."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ortools>=9.10",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", ".", "test"]
+testpaths = ["test"]
+
+[tool.uv]
+package = false
