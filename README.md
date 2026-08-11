@@ -1,19 +1,25 @@
-# Event Schedule Solution
+# Roster-Solver - an Event Schedule Solution
 
 Assigns a pool of workers to a list of events (bike-riding and road safety training sessions) subject to a set of constraints, using Google OR-Tools **CP-SAT**.
 
 See [`problem_statement.md`](problem_statement.md) for the full model.
 
+## Data
+
+Real data is not provided for obvious reason, but this codebase include 
+
 ## Model
 
-### Hard constraints (always enforced)
+### Hard constraints
 
 1. Each event is staffed with exactly `nworkers_needed` workers.
 2. Each event meets its per-skill minimums (default: 2 mech, 2 first_aid, 1 leader).
 3. No worker is double-booked in the same time slot.
 
 Availability and location willingness are enforced by construction (a worker is
-only assignable to events they can actually serve).
+only assignable to events they can actually serve). 
+
+Disclaimer: By nature of the data being fed, it is impossible to overbook a worker. As such, no constraint enforcing a target or maximum number of hours is implemented. Using this codebase with different data would require adding this constraint / objective.
 
 ### Soft objectives (minimise inconvenience `z`)
 
@@ -31,8 +37,6 @@ default weights encode their importance order (higher wins); pass your own via
 
 After solving, `CpSatScheduler.objective_value()` returns `z` and
 `objective_breakdown()` returns the per-term (unweighted) penalties.
-
-The previous MIP/brute-force attempts are kept for reference under [`old/`](old/).
 
 ## Layout
 
