@@ -57,15 +57,15 @@ $$
 \forall e \in E,\  \sum_{p \in P} S_{pe} M_p \geq 2, \sum_{p \in P} S_{pe} F_p \geq 2, \sum_{p \in P} S_{pe} C_p \geq 1
 $$
 
-### Inconvinience functions
+### Objective functions
 
-1. Prioritize worker assignment in function of priority level
-2. For a given event set, prioritize the same team assignment
-3. Prioritize Prioriser les gens dans leur quartier de résidence
+1. Prioritize worker assignment in function of priority level.
+2. For a given event set, prioritize the same team assignment.
+3. Prioritize worker being allocated in their own neighbourhood
 4. pro rata de masse d'heure entre les gens du même level
-5. Prioriser la même équipe pour l'école.
+5. Prioritize the same team for the same school
 
 ### Assumptions
 
-- Time to get between locations is negligible
+- There is always time to get from one event an event in the next timeslot
 - Even if a worker is scheduled for the whole week (without being double booked), his schedule will not exceed the maximum planned number of hours.
