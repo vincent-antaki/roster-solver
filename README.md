@@ -1,98 +1,125 @@
-# Roster-Solver - an Event Schedule Solution
+# Roster-Solver: CP-SAT Event Scheduler
 
-Assigns a pool of workers to a list of events (bike-riding and road safety training sessions) subject to a set of constraints, using Google OR-Tools **CP-SAT**.
+**Assign workers to bike-riding and road-safety training events** while respecting skills, availability, location preferences, and fairness — powered by Google OR-Tools CP-SAT.
 
-See [`problem_statement.md`](problem_statement.md) for the full model.
+![Roster Grid](figures/roster_grid.png)
 
-## Data
+## Quick Demo
 
-Real data is not provided for obvious reason, but this codebase include 
+```bash
+# Install dependencies (requires Python 3.12+)
+uv sync
 
-## Model
-
-### Hard constraints
-
-1. Each event is staffed with exactly `nworkers_needed` workers.
-2. Each event meets its per-skill minimums (default: 2 mech, 2 first_aid, 1 leader).
-3. No worker is double-booked in the same time slot.
-
-Availability and location willingness are enforced by construction (a worker is
-only assignable to events they can actually serve). 
-
-Disclaimer: By nature of the data being fed, it is impossible to overbook a worker. As such, no constraint enforcing a target or maximum number of hours is implemented. Using this codebase with different data would require adding this constraint / objective.
-
-### Soft objectives (minimise inconvenience `z`)
-
-All preferences are combined into a single weighted sum that is minimised. The
-default weights encode their importance order (higher wins); pass your own via
-`solve(coefficients=...)`, and set a weight to `0` to disable a term.
-
-| Term | Default weight | Meaning |
-|------|---------------:|---------|
-| `same_group` | 100000 | Same team across events of one class (`group_id`); also penalises workers only *partially* available across the group's events |
-| `priority` | 10000 | Prefer scheduling higher-`priority_level` workers |
-| `same_location` | 1000 | Same team across events at one location (school); partial availability penalised as above |
-| `proportional_split` | 1 | Fair, availability-weighted workload within a level |
-| `neighbourhood` | 1 | Prefer workers residing in the event's neighbourhood |
-
-After solving, `CpSatScheduler.objective_value()` returns `z` and
-`objective_breakdown()` returns the per-term (unweighted) penalties.
-
-## Codebase
-
-### Layout
-
+# Run the built-in example
+uv run python -m roster_solver.solver
 ```
-src/roster_solver/
-  structures.py   # Location, Event, Person, Solution + constants
-  solver.py       # CpSatScheduler
-  synthetic.py    # seeded generator of anonymised (events, workers) problems
-  plots.py        # pure dict-in / Figure-out plotting helpers
-  utils.py        # bidict, groupby_unsorted
-notebooks/
-  visualisations.ipynb   # run solver experiments, call plots, save figures/
-test/             # pytest suite (scenarios live in test/conftest.py fixtures)
+
+## Problem
+
+A non-profit runs weekly road-safety training sessions at schools across a city. Each session needs a team of workers with specific certifications (mechanic, first-aid, leader). Workers have varying availability, location preferences, and priority levels. The goal: **build a weekly schedule that satisfies all hard constraints while minimising inconvenience** — keeping teams consistent across a class's sessions, respecting seniority, distributing workload fairly, and preferring local workers.
+
+This is a constrained assignment problem with combinatorial complexity. Roster-Solver formulates it as a CP-SAT model and solves it with Google OR-Tools.
+
+## Features
+
+| Category | Details |
+|----------|---------|
+| **Hard constraints** | Exact staffing per event, per-skill minimums (2 mech / 2 first-aid / 1 leader), no double-booking |
+| **Soft objectives** | 5 weighted terms: same-group team consistency, priority level, same-location consistency, availability-weighted fairness, neighbourhood preference |
+| **Lexicographic weights** | Default coefficients (100k / 10k / 1k / 1 / 1) approximate strict priority ordering |
+| **Reproducible benchmarks** | Seeded synthetic problem generator with feasibility pre-check |
+| **Visualisations** | 4 notebook-driven figures: roster grid, solver scaling, gap decay, fairness comparison |
+
+## Architecture
+
+```mermaid
+graph LR
+    A[structures.py<br/>Location, Event, Person, Solution] --> B[solver.py<br/>CpSatScheduler]
+    C[synthetic.py<br/>make_problem] --> B
+    B --> D[plots.py<br/>Pure dict→Figure helpers]
+    D --> E[notebooks/visualisations.ipynb]
+    E --> F[figures/*.png]
+    B --> G[test/*<br/>26 pytest scenarios]
+```
+
+## Installation
+
+```bash
+# With uv (recommended)
+uv sync
+
+# Or with pip
+pip install -e ".[dev]"
+```
+
+Requires Python ≥ 3.12. Core dependency: `ortools ≥ 9.10`.
+
+## Usage
+
+### As a Library
+
+```python
+from roster_solver.solver import CpSatScheduler
+from roster_solver.synthetic import make_problem
+from roster_solver.structures import DEFAULT_COEFFICIENTS
+
+# Generate or load your (events, workers)
+events, workers = make_problem(n_workers=30, n_events=20, seed=42)
+
+# Solve with default lexicographic weights
+scheduler = CpSatScheduler(events, workers)
+solution = scheduler.solve(max_seconds=30.0)
+
+if solution:
+    print(solution.to_json(events))
+    print("Objective breakdown:", scheduler.objective_breakdown())
+```
+
+### Custom Objective Weights
+
+```python
+# Disable team consistency, emphasise fairness
+custom = {"same_group": 0, "proportional_split": 100}
+solution = scheduler.solve(coefficients=custom)
+```
+
+### Run Tests
+
+```bash
+uv run pytest -v
+```
+
+### Regenerate Figures
+
+```bash
+PYTHONPATH=src uv run python -m nbconvert \
+    --to notebook --execute notebooks/visualisations.ipynb --inplace
 ```
 
 ## Visualisations
 
-`notebooks/visualisations.ipynb` explores the solver through four figures
-(regenerated headlessly with):
+| Figure | Description |
+|--------|-------------|
+| `roster_grid.png` | Worker × time-slot heatmap showing team consistency and no double-booking |
+| `scaling.png` | Wall time & model size vs total staffing demand; OPTIMAL → FEASIBLE transition |
+| `gap_decay.png` | Incumbent vs best bound over a 30s solve (balanced weights) |
+| `fairness.png` | Workload distribution with/without `proportional_split` term |
+
+## Project Structure
 
 ```
-PYTHONPATH=src uv run python -m nbconvert --to notebook --execute notebooks/visualisations.ipynb --inplace
+src/roster_solver/
+  structures.py   # Location, Event, Person, Solution + constants
+  solver.py       # CpSatScheduler (CP-SAT model + solve)
+  synthetic.py    # Seeded generator of anonymised (events, workers)
+  plots.py        # Pure dict-in / Figure-out plotting helpers
+  utils.py        # bidict, groupby_unsorted
+notebooks/
+  visualisations.ipynb   # Runs solver experiments, saves figures/
+test/             # pytest suite (scenarios in test/conftest.py)
+figures/          # Generated PNG outputs
 ```
 
-1. **Roster grid** — worker × time-slot heatmap of a solved schedule
-   (team consistency, no double-booking).
-2. **Scaling** — wall time and model size vs total staffing demand; where
-   CP-SAT stops proving optimality within a time budget.
-3. **Gap decay** — incumbent vs proven bound over one long solve (balanced
-   weights), showing CP-SAT's "good solution fast, then tighten" behaviour.
-4. **Fairness** — workload distribution with and without the
-   `proportional_split` objective term.
+## License
 
-The plotting code is deliberately solver-free: `synthetic.make_problem`
-provides reproducible scenarios, the notebook runs the solver and assembles
-plain dicts, and `roster_solver.plots` renders them to `figures/*.png`.
-
-### How to run
-
-Start by setuping your environment with `uv sync`. Then, run trivial example with:
-
-```
-PYTHONPATH=src:. uv run python -m roster_solver.solver
-```
-
-
-### Test
-
-(`pytest` already sets the path via `pyproject.toml`, so tests need no `PYTHONPATH`.)
-
-```
-uv run pytest
-```
-
-## Analysis
-
-TODO
+MIT License — see [LICENSE](LICENSE) for details.
