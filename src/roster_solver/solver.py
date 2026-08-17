@@ -141,7 +141,29 @@ class CpSatScheduler:
         return self._team_consistency_penalty(events_by_group_id(self.events))
 
     def _pen_same_location(self) -> List[cp_model.IntVar]:
-        return self._team_consistency_penalty(events_by_location(self.events))
+        """Scalable same-location team consistency using team assignment variables.
+
+        For each location and worker: add a binary variable team[l, w] indicating
+        whether worker w is on location l's core team. For each event e at location l:
+        x_{w,e} <= team[l, w]. This encourages a consistent team across all events
+        at a location with O(locations * workers) variables instead of O(events^2 * workers).
+        """
+        penalties: List = []
+        loc_events = events_by_location(self.events)
+
+        for loc, evs in loc_events.items():
+            if len(evs) < 2:
+                continue
+            for w in self.workers:
+                team_var = self.model.new_bool_var(f"team_loc[{loc.name}|{w.id}]")
+                for e in evs:
+                    var = self.assign.get((e.id, w.id))
+                    if var is not None:
+                        self.model.add(var <= team_var)
+                penalties.append(team_var)
+        return penalties
+        #return self._team_consistency_penalty(events_by_location(self.events))
+
 
     def _pen_neighbourhood(self):
         """Penalise assigning a worker outside their residence neighbourhood."""
@@ -240,6 +262,9 @@ class CpSatScheduler:
 
         self.solver = cp_model.CpSolver()
         self.solver.parameters.max_time_in_seconds = max_seconds
+        self.solver.parameters.num_search_workers = 8
+        self.solver.parameters.symmetry_level = 2
+        self.solver.parameters.cp_model_probing_level = 2
         self.status = self.solver.solve(self.model)
 
         if self.status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
