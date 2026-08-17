@@ -69,20 +69,33 @@ def plot_roster_grid(
     base_colors = plt.cm.tab20.colors
     cmap = mcolors.ListedColormap(["white"] + [base_colors[i % 20] for i in range(len(group_ids))])
 
-    fig, ax = plt.subplots(figsize=(max(8.0, 0.42 * len(slots)), max(4.0, 0.30 * len(workers))))
+    n_slots = len(slots)
+    n_workers = len(workers)
+    fig_width = max(10.0, 0.5 * n_slots)
+    fig_height = max(4.0, 0.30 * n_workers)
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     ax.imshow(cell_group, cmap=cmap, aspect="auto", interpolation="nearest")
 
-    for i in range(len(workers)):
-        for j in range(len(slots)):
+    for i in range(n_workers):
+        for j in range(n_slots):
             if cell_group[i, j]:
                 ax.text(
                     j, i, cell_loc[i, j],
                     ha="center", va="center", fontsize=5, color="white",
                 )
 
-    ax.set_xticks(range(len(slots)))
-    ax.set_xticklabels([_slot_tick(s) for s in slots], fontsize=7)
-    ax.set_yticks(range(len(workers)))
+    # X-axis: rotate labels, show every Nth tick if many slots
+    if n_slots > 20:
+        step = max(1, n_slots // 20)
+        tick_positions = range(0, n_slots, step)
+        tick_labels = [_slot_tick(slots[i], short=True) for i in tick_positions]
+    else:
+        tick_positions = range(n_slots)
+        tick_labels = [_slot_tick(s) for s in slots]
+
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, fontsize=7, rotation=45, ha="right")
+    ax.set_yticks(range(n_workers))
     ax.set_yticklabels(workers, fontsize=6)
     ax.tick_params(length=0)
     ax.set_xlabel("time slot")
@@ -98,7 +111,7 @@ def plot_roster_grid(
     ]
     legend = ax.legend(
         handles=group_handles + loc_handles,
-        loc="upper center", bbox_to_anchor=(0.5, -0.08),
+        loc="upper center", bbox_to_anchor=(0.5, -0.12),
         ncol=min(6, max(len(group_handles), len(loc_handles))),
         fontsize=6, frameon=False,
     )
@@ -106,16 +119,18 @@ def plot_roster_grid(
 
     n_shifts = int(cell_group.astype(bool).sum())
     fig.text(
-        0.5, -0.16, f"{len(events)} events / {n_shifts} assignments / {len(workers)} workers",
+        0.5, -0.18, f"{len(events)} events / {n_shifts} assignments / {n_workers} workers",
         ha="center", fontsize=8, color="grey",
     )
     return fig
 
 
-def _slot_tick(slot) -> str:
+def _slot_tick(slot, short: bool = False) -> str:
     from datetime import date as _date
     date, during = slot
     day = _date.fromisoformat(date) if isinstance(date, str) else date
+    if short:
+        return f"{day.day}{'a' if during == 'am' else 'p'}"
     return f"{day.month}/{day.day} {during}"
 
 
